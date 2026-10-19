@@ -1,3 +1,4 @@
+import { useNativeChatPastedTextAdmission } from './native-chat-pasted-text-state'
 import { useNativeChatComposerNotice } from './use-native-chat-composer-notice'
 import { useNativeChatMobileHoldNotice } from './use-native-chat-mobile-hold-notice'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
@@ -170,12 +171,14 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     })
     const { imageAttachments, attachResolvedPaths, clearImageAttachments, removeImageAttachment } =
       attachments
-    const imageBlock = nativeChatImageSendBlock(imageAttachments)
-    const sendBlockedReason = imageBlock.reason ?? structuredTransport?.sendBlockedReason ?? null
+    const textPasteAdmission = useNativeChatPastedTextAdmission(draftScopeKey)
+    const sendBlock = nativeChatImageSendBlock(imageAttachments)
+    const sendBlockedReason = sendBlock.reason ?? structuredTransport?.sendBlockedReason ?? null
     const sendHeld =
       disabled ||
       structuredTransport?.sendOut === true ||
-      imageBlock.holdsSend ||
+      sendBlock.holdsSend ||
+      textPasteAdmission === 'saving' ||
       structuredTransport?.sendBlockedReason !== undefined
     const sendButtonDisabled = isWorking
       ? !hasPty || !onStop
@@ -222,6 +225,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       resolvePendingImageAttachment: attachments.pendingChips.resolve,
       revealPendingImageAttachment: attachments.revealPendingImageAttachment,
       dropPendingImageAttachment: attachments.dropPendingImageAttachment,
+      pastesInline: () => goalMode.active,
+      pastedTextEditor: structuredTransport ? attachments.scopeEditor : null,
       setNotice
     })
 
@@ -278,6 +283,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     }
     const sendPty = useNativeChatPtyComposerSend({
+      draftScopeKey,
       ...ptyCommandRouting,
       draft,
       imageAttachments,

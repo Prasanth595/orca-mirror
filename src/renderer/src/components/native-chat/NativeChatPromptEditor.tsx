@@ -1,3 +1,6 @@
+import { nativeChatPastedTextClipboardText } from './native-chat-composer-pasted-text-references'
+import { NativeChatPastedTextScopeProvider } from './native-chat-pasted-text-state'
+import { readNativeChatComposerDraft } from './native-chat-composer-draft-store'
 import {
   readNativeChatDraftDocument,
   writeNativeChatDraftDocument
@@ -56,6 +59,7 @@ export function NativeChatPromptEditor({
   className,
   ...events
 }: Props): React.JSX.Element {
+  const historyPaths = useRef<Readonly<Record<string, string>>>({})
   const placeholderRef = useRef(placeholder)
   placeholderRef.current = placeholder
   const editor = useEditor(
@@ -117,7 +121,9 @@ export function NativeChatPromptEditor({
           return true
         },
         clipboardTextSerializer: (slice) =>
-          slice.content.textBetween(0, slice.content.size, '\n', promptLeafText)
+          slice.content.textBetween(0, slice.content.size, '\n', (node) =>
+            nativeChatPastedTextClipboardText(scopeKey ?? '', promptLeafText(node))
+          )
       },
       onTransaction: ({ editor: current, transaction }) => {
         // Why: a value set from the store with no change of this window behind it (another
@@ -129,7 +135,16 @@ export function NativeChatPromptEditor({
           (!transaction.getMeta('preventUpdate') ||
             hasUnsavedNativeChatComposerDraftChange(scopeKey))
         ) {
-          writeNativeChatDraftDocument(scopeKey, promptText(current.state.doc), current.getJSON())
+          historyPaths.current = {
+            ...historyPaths.current,
+            ...readNativeChatComposerDraft(scopeKey).pastedTextFiles
+          }
+          writeNativeChatDraftDocument(
+            scopeKey,
+            promptText(current.state.doc),
+            current.getJSON(),
+            historyPaths.current
+          )
         }
       },
       onUpdate: () => {
@@ -285,6 +300,14 @@ export function NativeChatPromptEditor({
                 editor.view.dispatch(tr.setMeta('addToHistory', false))
               }
             },
+            stagePastedText: (token) => {
+              const pill = { type: NativeChatFileReference.name, attrs: { token } }
+              editor.view.dispatch(closeHistory(editor.state.tr))
+              editor.view.dispatch(
+                editor.state.tr.replaceSelectionWith(editor.schema.nodeFromJSON(pill), false)
+              )
+              editor.view.dispatch(closeHistory(editor.state.tr))
+            },
             insertFileReferences: (paths) => {
               editor.commands.insertContentAt(
                 editor.state.selection.from,
@@ -298,13 +321,15 @@ export function NativeChatPromptEditor({
   useImperativeHandle(inputRef, () => input!, [input])
 
   return (
-    <NativeChatImageRowProvider value={imageRow}>
-      <EditorContent
-        editor={editor}
-        {...events}
-        data-disabled={disabled || undefined}
-        className="data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
-      />
-    </NativeChatImageRowProvider>
+    <NativeChatPastedTextScopeProvider value={scopeKey ?? ''}>
+      <NativeChatImageRowProvider value={imageRow}>
+        <EditorContent
+          editor={editor}
+          {...events}
+          data-disabled={disabled || undefined}
+          className="data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+        />
+      </NativeChatImageRowProvider>
+    </NativeChatPastedTextScopeProvider>
   )
 }

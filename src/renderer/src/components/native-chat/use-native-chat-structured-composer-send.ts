@@ -19,6 +19,10 @@ import {
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-draft-comparison'
+import {
+  admitNativeChatPastedText,
+  resolveNativeChatPastedText
+} from './native-chat-composer-pasted-text-references'
 
 export type UseNativeChatStructuredComposerSendArgs = {
   agent: AgentType
@@ -66,6 +70,10 @@ export function useNativeChatStructuredComposerSend({
       if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
         return
       }
+      if (!admitNativeChatPastedText(draftScopeKey, text, structuredTransport.onError)) {
+        return
+      }
+      text = resolveNativeChatPastedText(draftScopeKey, text)
       const hostCommand = isNativeChatStructuredHostCommand(text, agent, structuredTransport)
       // A held host takes no turn, and its notice says why; an option command only changes what
       // the next turn runs with.
